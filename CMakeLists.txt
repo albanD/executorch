@@ -803,9 +803,11 @@ if(EXECUTORCH_BUILD_KERNELS_QUANTIZED)
   target_link_options_shared_lib(quantized_ops_lib)
 endif()
 
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backends/aoti)
+
 if(EXECUTORCH_BUILD_EXECUTOR_RUNNER)
   # Baseline libraries that executor_runner will link against.
-  set(_executor_runner_libs executorch gflags)
+  set(_executor_runner_libs executorch gflags executorch_delegate_aoti)
 
   if(EXECUTORCH_BUILD_KERNELS_OPTIMIZED)
     list(APPEND _executor_runner_libs optimized_native_cpu_ops_lib)
@@ -829,7 +831,9 @@ if(EXECUTORCH_BUILD_EXECUTOR_RUNNER)
     endif()
   endif()
   target_link_libraries(executor_runner ${_executor_runner_libs})
+  set_property(TARGET executor_runner PROPERTY ENABLE_EXPORTS ON)
   target_compile_options(executor_runner PUBLIC ${_common_compile_options})
+
 endif()
 
 if(EXECUTORCH_BUILD_VULKAN)
