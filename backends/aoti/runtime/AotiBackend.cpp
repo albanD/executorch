@@ -156,16 +156,16 @@ using AOTInductorModelContainerRunFunc = AOTIRuntimeError(*)(
     // Let's say cpu is 0 for ET as well
     return 0;
   }
-  int32_t aoti_torch_device_type_cuda() {
+  __attribute__((__visibility__("default"))) int32_t aoti_torch_device_type_cuda() {
     // Let's say cuda is 1 for ET as well
     return 1;
   }
-  int32_t aoti_torch_dtype_float32() {
+  __attribute__((__visibility__("default"))) int32_t aoti_torch_dtype_float32() {
     // Let assume the dtype here is all we will support
     return 6;
   }
   AOTITorchError aoti_torch_delete_tensor_object(AOTITensorHandle tensor) {
-    throw std::runtime_error("Should never allocate?");
+    throw std::runtime_error("Should never have allocated anyways?");
     return Error::NotSupported;
   }
   AOTITorchError aoti_torch_create_tensor_from_blob(
@@ -205,6 +205,12 @@ public:
     // Once in program
     AOTIBackend() {
       std::cout<<"Created backend"<<std::endl;
+      // void* tmp_handle = dlopen(nullptr, RTLD_GLOBAL);
+      // if (tmp_handle == nullptr) {
+      //     std::cout<<dlerror()<<std::endl;
+      // } else {
+      //   std::cout <<"weird dlopen went ok"<<std::endl;
+      // }
     }
 
   bool is_available() const override {
@@ -234,7 +240,7 @@ public:
     processed->Free();
 
     // Load the ELF using dlopen
-    void* so_handle = dlopen("/tmp/test.so", RTLD_NOW);
+    void* so_handle = dlopen("/tmp/test.so", RTLD_LAZY | RTLD_LOCAL);
     if (so_handle == nullptr) {
         std::cout<<dlerror()<<std::endl;
         return Error::AccessFailed;

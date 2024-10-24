@@ -90,6 +90,7 @@ class AOTISupportedOperators(OperatorSupportBase):
 class AotiPartitioner(Partitioner):
     def __init__(self, compile_spec: List[CompileSpec]) -> None:
         self.delegation_spec = DelegationSpec(AotiBackend.__name__, compile_spec)
+        print(self.delegation_spec)
 
     def partition(self, exported_program: ExportedProgram) -> PartitionResult:
         # Run the CapabilityBasedPartitioner to return the largest possible

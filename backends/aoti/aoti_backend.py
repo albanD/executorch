@@ -7,12 +7,15 @@
 import copy
 from typing import final, List
 
+import torch
 from executorch.exir.backend.backend_details import (
     BackendDetails,
     ExportedProgram,
     PreprocessResult,
 )
 from executorch.exir.backend.compile_spec_schema import CompileSpec
+
+from subprocess import check_call
 
 
 @final
@@ -24,12 +27,15 @@ class AotiBackend(BackendDetails):
     ) -> PreprocessResult:
         print("entering  the lowerable parts in AotiBackend.preprocess....")
 
+        print("here", edge_program.example_inputs)
         copy_edge_program = copy.deepcopy(edge_program)
         graph_module = copy_edge_program.graph_module
-        print(copy_edge_program.example_inputs)
-        print(edge_program.example_inputs)
-        args, kwargs = copy_edge_program.example_inputs
+        # args, kwargs = copy_edge_program.example_inputs
+        args, kwargs = (torch.ones(10, device="cuda"), torch.ones(10, device="cuda")), {}
         so_path = torch._inductor.aot_compile(graph_module, args, kwargs, options={})  # type: ignore[arg-type]
-        with open(so_path, "r") as f:
+        print(so_path)
+        check_call(f"patchelf --remove-needed libtorch.so --remove-needed libtorch_cuda.so --remove-needed libc10_cuda.so --remove-needed libtorch_cpu.so --add-needed libcudart.so {so_path}", shell=True)
+
+        with open(so_path, "rb") as f:
             data = f.read()
-        return PreprocessResult(bytes(data, encoding="utf8"))
+        return PreprocessResult(data)

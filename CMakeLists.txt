@@ -831,8 +831,8 @@ if(EXECUTORCH_BUILD_EXECUTOR_RUNNER)
     endif()
   endif()
   target_link_libraries(executor_runner ${_executor_runner_libs})
+  set_property(TARGET executor_runner PROPERTY ENABLE_EXPORTS ON)
   target_compile_options(executor_runner PUBLIC ${_common_compile_options})
-
 
 endif()
 
