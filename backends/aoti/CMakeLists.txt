@@ -23,5 +23,6 @@ add_library(executorch_delegate_aoti STATIC ${_aoti_sources})
 target_include_directories(
   executorch_delegate_aoti PUBLIC ${_common_include_directories}
 )
+target_compile_options(executorch_delegate_aoti PUBLIC -fexceptions -frtti -fPIC)
 
 target_link_options_shared_lib(executorch_delegate_aoti)
