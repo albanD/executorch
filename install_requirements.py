@@ -109,7 +109,7 @@ if os.name == "nt":
 NIGHTLY_VERSION = "dev20241007"
 
 # The pip repository that hosts nightly torch packages.
-TORCH_NIGHTLY_URL = "https://download.pytorch.org/whl/nightly/cpu"
+TORCH_NIGHTLY_URL = "https://download.pytorch.org/whl/nightly/cu124"
 
 # pip packages needed by exir.
 EXIR_REQUIREMENTS = [
