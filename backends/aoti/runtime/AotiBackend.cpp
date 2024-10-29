@@ -16,6 +16,8 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <memory>
+#include <unordered_map>
 
 namespace executorch {
 namespace backends {
@@ -74,7 +76,7 @@ extern "C" {
     AOTInductorModelContainerHandle container_handle,
     size_t* num_constants);
 
-using AOTInductorModelContainerRunFunc = AOTIRuntimeError(*)(
+  using AOTInductorModelContainerRunFunc = AOTIRuntimeError(*)(
     AOTInductorModelContainerHandle container_handle,
     AOTITensorHandle* input_handles, // array of input AOTITensorHandle; handles
                                      // are stolen; the array itself is borrowed
@@ -92,6 +94,8 @@ using AOTInductorModelContainerRunFunc = AOTIRuntimeError(*)(
   AOTInductorModelContainerGetNumInputsFunc AOTInductorModelContainerGetNumInputs = nullptr;
   AOTInductorModelContainerGetNumOutputsFunc AOTInductorModelContainerGetNumOutputs = nullptr;
   AOTInductorModelContainerRunFunc AOTInductorModelContainerRun = nullptr;
+  std::unordered_map<Tensor*, std::vector<int64_t>> tensor_to_sizes;
+  std::unordered_map<Tensor*, std::vector<int64_t>> tensor_to_strides;
 
   int32_t aoti_torch_grad_mode_is_enabled() {
     // No autograd ever
@@ -118,8 +122,46 @@ using AOTInductorModelContainerRunFunc = AOTIRuntimeError(*)(
   AOTITorchError aoti_torch_get_strides(
     AOTITensorHandle tensor,
     int64_t** ret_strides) {
-    throw std::runtime_error("Cannot get strides. One is int64_t* and the other int32_t*");
+    if (tensor_to_strides.find(tensor) == tensor_to_strides.end()) {
+      std::vector<int64_t> strides(tensor->dim());
+      for (int i = 0; i < tensor->dim(); i++) {
+        strides[i] = tensor->strides()[i];
+      }
+      tensor_to_strides[tensor] = strides;
+    }
+    *ret_strides = tensor_to_strides[tensor].data();
+    std::cout << "getting strides from tensor " << tensor << " with dim " << tensor->dim() << std::endl;
+    for (int i = 0; i < tensor->dim(); i++) {
+      std::cout << "strides " << i << " = " << *ret_strides[i] << std::endl;
+    }
+    return Error::Ok;
   }
+
+  AOTITorchError aoti_torch_get_dtype(
+    AOTITensorHandle tensor,
+    int32_t* ret_dtype) {
+    *ret_dtype = static_cast<int32_t>(tensor->scalar_type());
+    return Error::Ok;
+  }
+
+  AOTITorchError aoti_torch_get_sizes(
+    AOTITensorHandle tensor,
+    int64_t** ret_sizes) {
+    if (tensor_to_sizes.find(tensor) == tensor_to_sizes.end()) {
+      std::vector<int64_t> sizes(tensor->dim());
+      for (int i = 0; i < tensor->dim(); i++) {
+        sizes[i] = tensor->size(i);
+      }
+      tensor_to_sizes[tensor] = sizes;
+    }
+    *ret_sizes = tensor_to_sizes[tensor].data();
+    std::cout << "getting sizes from tensor " << tensor << " with dim " << tensor->dim() << std::endl;
+    for (int i = 0; i < tensor->dim(); i++) {
+      std::cout << "size " << i << " = " << *ret_sizes[i] << std::endl;
+    }
+    return Error::Ok;
+  }
+
   AOTITorchError aoti_torch_get_storage_size(
     AOTITensorHandle tensor,
     int64_t* ret_size) {
@@ -165,8 +207,8 @@ using AOTInductorModelContainerRunFunc = AOTIRuntimeError(*)(
     return 6;
   }
   AOTITorchError aoti_torch_delete_tensor_object(AOTITensorHandle tensor) {
-    throw std::runtime_error("Should never have allocated anyways?");
-    return Error::NotSupported;
+    std::cout<<"Deleting "<<tensor<< ", not doing anything because we don't handle tensor memory" << std::endl;
+    return Error::Ok;
   }
   AOTITorchError aoti_torch_create_tensor_from_blob(
     void* data,
@@ -190,7 +232,7 @@ using AOTInductorModelContainerRunFunc = AOTIRuntimeError(*)(
     int32_t device_type,
     int32_t device_index,
     AOTITensorHandle* ret_new_tensor) {
-    throw std::runtime_error("Should never create from blob");
+    throw std::runtime_error("Need to implement empty_strided for CUDA");
     return Error::NotSupported;
   }
 }
@@ -350,6 +392,8 @@ public:
     dlclose(handle->so_handle);
     AOTInductorModelContainerDelete(handle->container_handle);
     free(handle);
+    tensor_to_sizes.clear();
+    tensor_to_strides.clear();
   }
 
 };
