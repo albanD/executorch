@@ -1,5 +1,6 @@
 
 #include <executorch/backends/arm/runtime/VelaBinStream.h>
+#include <executorch/extension/tensor/tensor.h>
 #include <executorch/runtime/backend/interface.h>
 #include <executorch/runtime/core/error.h>
 #include <executorch/runtime/core/evalue.h>
@@ -12,12 +13,14 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include "cuda_runtime.h"
 
 #include <iostream>
 #include <fstream>
 #include <vector>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace executorch {
 namespace backends {
@@ -96,6 +99,7 @@ extern "C" {
   AOTInductorModelContainerRunFunc AOTInductorModelContainerRun = nullptr;
   std::unordered_map<Tensor*, std::vector<int64_t>> tensor_to_sizes;
   std::unordered_map<Tensor*, std::vector<int64_t>> tensor_to_strides;
+  std::unordered_set<std::shared_ptr<Tensor>> tensors;
 
   int32_t aoti_torch_grad_mode_is_enabled() {
     // No autograd ever
@@ -207,7 +211,13 @@ extern "C" {
     return 6;
   }
   AOTITorchError aoti_torch_delete_tensor_object(AOTITensorHandle tensor) {
-    std::cout<<"Deleting "<<tensor<< ", not doing anything because we don't handle tensor memory" << std::endl;
+    std::cout << "Deleting " << tensor << std::endl;
+    for (auto it = tensors.begin(); it != tensors.end(); ++it) {
+        if (it->get() == tensor) {
+            tensors.erase(it);
+            break; // Exit the loop once the element is found and removed
+        }
+    }
     return Error::Ok;
   }
   AOTITorchError aoti_torch_create_tensor_from_blob(
@@ -232,9 +242,117 @@ extern "C" {
     int32_t device_type,
     int32_t device_index,
     AOTITensorHandle* ret_new_tensor) {
-    throw std::runtime_error("Need to implement empty_strided for CUDA");
-    return Error::NotSupported;
+      // This requires us to reserve CUDA memory and put it into a ETensor
+      void* ptr;
+      int64_t numel = 1;
+      for (int i = 0; i < ndim; i++) {
+        numel *= sizes_ptr[i];
+      }
+
+      if (dtype != 6) { // throw if not float32
+        throw std::runtime_error("Need to implement empty_strided for non-float32");
+      }
+
+      int64_t nbytes = numel * 4;
+
+      if (device_type == 1) { // cuda
+        std::cout << "Allocating " << nbytes << " bytes on CUDA " << std::endl;
+        cudaError_t err = cudaMalloc(&ptr, nbytes);
+        if (err != cudaSuccess) {
+          std::cout << "failed to allocate " << nbytes << std::endl;
+          throw std::runtime_error("Failed to call cudaMalloc");
+        }
+      } else if (device_type == 0) { // cpu
+        std::cout << "Allocating " << nbytes << " bytes on CPU " << std::endl;
+        ptr = malloc(nbytes);
+        if (ptr == nullptr) {
+          throw std::runtime_error("Failed to call malloc");
+        }
+      } else {
+        throw std::runtime_error("Need to implement empty_strided for non-CUDA non-CPU");
+      }
+      std::cout << "Allocated " << nbytes << " bytes at " << ptr << ", sizes_ptr " << sizes_ptr << std::endl;
+
+      // ETensor sizes
+      std::vector<int32_t> sizes(ndim);
+      for (int i = 0; i < ndim; i++) {
+        sizes[i] = sizes_ptr[i];
+      }
+      // ETensor creation
+      auto tensor = executorch::extension::make_tensor_ptr(sizes, ptr);
+
+      // Store the tensor
+      tensors.insert(tensor);
+
+      std::cout << "sizes.data(): " << sizes.data() << ", tensor->sizes().data(): " << tensor->sizes().data() << std::endl;
+      std::cout << "Size[0] of tensor " << tensor.get() << " is " << tensor->sizes()[0] << std::endl;
+      *ret_new_tensor = tensor.get();
+    return Error::Ok;
   }
+
+  void checkCudaError(cudaError_t err, const char* msg) {
+    if (err != cudaSuccess) {
+        std::cerr << "Error: " << msg << " (" << cudaGetErrorString(err) << ")" << std::endl;
+        exit(EXIT_FAILURE);
+    }
+}
+
+  AOTITorchError aoti_torch_copy_(
+    AOTITensorHandle self,
+    AOTITensorHandle src,
+    int32_t non_blocking) {
+  // check if size is the same
+  if (self->dim() != src->dim()) {
+    std::cout << "self.dim() " << self->dim() << ", src.dim() " << src->dim() << std::endl;
+    throw std::runtime_error("self.dim() != src.dim()");
+  }
+  std::cout << "self->data_ptr(): " << self->data_ptr() << " sizes: " << self->sizes().data() << std::endl;
+  std::cout << "src->data_ptr(): " << src->data_ptr() << " sizes: " << src->sizes().data() << std::endl;
+  for (int i = 0; i < self->dim(); i++) {
+    if (self->sizes()[i] != src->sizes()[i]) {
+      std::cout << "self.sizes()[i] " << self->sizes()[i] << ", src.sizes()[i] " << src->sizes()[i] << std::endl;
+      throw std::runtime_error("size mismatch");
+    }
+  }
+
+  int size = src->nbytes();
+  // should check for device
+  cudaPointerAttributes srcAttributes, dstAttributes;
+  cudaError_t err;
+  // Get attributes of the source pointer
+  err = cudaPointerGetAttributes(&srcAttributes, src->data_ptr());
+  checkCudaError(err, "Failed to get source pointer attributes");
+  // Get attributes of the destination pointer
+  err = cudaPointerGetAttributes(&dstAttributes, self->data_ptr());
+  checkCudaError(err, "Failed to get destination pointer attributes");
+  bool srcIsDevice = srcAttributes.type == cudaMemoryTypeDevice;
+  bool dstIsDevice = dstAttributes.type == cudaMemoryTypeDevice;
+  // Determine the memory locations and perform the appropriate copy
+  if (srcIsDevice && dstIsDevice) {
+      // Device to Device copy
+      err = cudaMemcpy(self->mutable_data_ptr(), src->data_ptr(), size, cudaMemcpyDeviceToDevice);
+      checkCudaError(err, "Failed to copy from device to device");
+  } else if (srcIsDevice && !dstIsDevice) {
+      // Device to Host copy
+      err = cudaMemcpy(self->mutable_data_ptr(), src->data_ptr(), size, cudaMemcpyDeviceToHost);
+      std::cout << "Device to Host copy, self data: " << ((float*)self->data_ptr())[0] << std::endl;
+      checkCudaError(err, "Failed to copy from device to host");
+  } else if (!srcIsDevice && dstIsDevice) {
+      // Host to Device copy
+      err = cudaMemcpy(self->mutable_data_ptr(), src->data_ptr(), size, cudaMemcpyHostToDevice);
+      std::cout << "Host to Device copy, src data: " << ((float*)src->data_ptr())[0] << std::endl;
+      checkCudaError(err, "Failed to copy from host to device");
+  } else if (!srcIsDevice && !dstIsDevice) {
+      // Host to Host copy
+      std::cout << "Host to Host copy, src data: " << ((float*)src->data_ptr())[0] << std::endl;
+      std::memcpy(self->mutable_data_ptr(), src->data_ptr(), size);
+  } else {
+      std::cerr << "Error: Unknown memory type. self: " << dstAttributes.type << ", src: " << srcAttributes.type << std::endl;
+      throw std::runtime_error("Unknown memory type");
+  }
+    // print first value of src and self
+  return Error::Ok;
+}
 }
 
 struct AOTIDelegateHandle {
@@ -383,6 +501,12 @@ public:
       // Should these last two be something?
       nullptr, nullptr);
 
+    // Still need to copy the output to args, because they are malloc'ed but
+    // not using the data_ptr from outputs.
+    for (int i = 0; i < num_outputs; i++) {
+      auto args_out = args[i + num_inputs]->toTensor();
+      aoti_torch_copy_(&args_out, outputs[i], 0);
+    }
     return Error::Ok;
   }
 

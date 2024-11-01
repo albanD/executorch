@@ -14,6 +14,13 @@ endif()
 
 include(${EXECUTORCH_ROOT}/build/Utils.cmake)
 
+find_package(CUDA)
+if(NOT CUDA_FOUND)
+  message(FATAL "CUDA cannot be found")
+else()
+  message(STATUS "CUDA found")
+endif()
+
 set(_common_include_directories ${EXECUTORCH_ROOT}/..)
 
 set(_aoti_sources backends/aoti/runtime/AotiBackend.cpp)
@@ -21,8 +28,11 @@ list(TRANSFORM _aoti_sources PREPEND "${EXECUTORCH_ROOT}/")
 
 add_library(executorch_delegate_aoti STATIC ${_aoti_sources})
 target_include_directories(
-  executorch_delegate_aoti PUBLIC ${_common_include_directories}
+  executorch_delegate_aoti PUBLIC ${_common_include_directories} ${CUDA_INCLUDE_DIRS}
 )
-target_compile_options(executorch_delegate_aoti PUBLIC -fexceptions -frtti -fPIC)
 
+add_subdirectory(${EXECUTORCH_ROOT}/extension/tensor ${CMAKE_CURRENT_BINARY_DIR}/../../extension/tensor)
+
+target_compile_options(executorch_delegate_aoti PUBLIC -fexceptions -frtti -fPIC)
+target_link_libraries(executorch_delegate_aoti PUBLIC extension_tensor ${CUDA_LIBRARIES})
 target_link_options_shared_lib(executorch_delegate_aoti)
