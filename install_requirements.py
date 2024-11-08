@@ -73,7 +73,7 @@ CMAKE_BUILD_ARGS = os.getenv("CMAKE_BUILD_ARGS", "")
 for arg in sys.argv[1:]:
     if arg == "--pybind":
         EXECUTORCH_BUILD_PYBIND = "ON"
-    elif arg in ["coreml", "mps", "xnnpack"]:
+    elif arg in ["coreml", "mps", "xnnpack", "aoti"]:
         if EXECUTORCH_BUILD_PYBIND == "ON":
             arg_upper = arg.upper()
             CMAKE_ARGS += f" -DEXECUTORCH_BUILD_{arg_upper}=ON"
@@ -106,10 +106,10 @@ if os.name == "nt":
 # NOTE: If a newly-fetched version of the executorch repo changes the value of
 # NIGHTLY_VERSION, you should re-run this script to install the necessary
 # package versions.
-NIGHTLY_VERSION = "dev20241007"
+NIGHTLY_VERSION = "dev20241024"
 
 # The pip repository that hosts nightly torch packages.
-TORCH_NIGHTLY_URL = "https://download.pytorch.org/whl/nightly/cpu"
+TORCH_NIGHTLY_URL = "https://download.pytorch.org/whl/nightly/cu121"
 
 # pip packages needed by exir.
 EXIR_REQUIREMENTS = [
@@ -125,6 +125,7 @@ DEVEL_REQUIREMENTS = [
     "pyyaml",  # Imported by the kernel codegen tools.
     "setuptools>=63",  # For building the pip package.
     "tomli",  # Imported by extract_sources.py when using python < 3.11.
+    "patchelf",  # For AOTInductor backend
     "wheel",  # For building the pip package archive.
     "zstd",  # Imported by resolve_buck.py.
 ]

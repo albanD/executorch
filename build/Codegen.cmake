@@ -79,7 +79,7 @@ function(generate_bindings_for_kernels)
   execute_process(
     COMMAND
       "${PYTHON_EXECUTABLE}" -c
-      "from distutils.sysconfig import get_python_lib;print(get_python_lib())"
+      "import torch; from pathlib import Path; print(Path(torch.__file__).parent.parent.absolute())"
     OUTPUT_VARIABLE site-packages-out
     ERROR_VARIABLE site-packages-out-error
     RESULT_VARIABLE site-packages-result

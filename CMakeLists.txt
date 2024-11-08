@@ -165,6 +165,8 @@ option(EXECUTORCH_BUILD_ARM_BAREMETAL
 
 option(EXECUTORCH_BUILD_COREML "Build the Core ML backend" OFF)
 
+option(EXECUTORCH_BUILD_AOTI "Build the AOTI backend" ON)
+
 option(EXECUTORCH_BUILD_KERNELS_CUSTOM "Build the custom kernels" OFF)
 
 option(EXECUTORCH_BUILD_KERNELS_CUSTOM_AOT "Build the custom ops lib for AOT"
@@ -629,6 +631,10 @@ if(EXECUTORCH_BUILD_XNNPACK)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backends/xnnpack)
 endif()
 
+if(EXECUTORCH_BUILD_AOTI)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backends/aoti)
+endif()
+
 if(EXECUTORCH_BUILD_DEVTOOLS)
   set(EXECUTORCH_BUILD_EXTENSION_DATA_LOADER
       ON
@@ -715,6 +721,10 @@ if(EXECUTORCH_BUILD_PYBIND)
     list(APPEND _dep_libs xnnpack_backend XNNPACK)
   endif()
 
+  if(EXECUTORCH_BUILD_AOTI)
+    list(APPEND _dep_libs executorch_delegate_aoti)
+  endif()
+
   # compile options for pybind
   set(_pybind_compile_options
       -Wno-deprecated-declarations
@@ -747,6 +757,7 @@ if(EXECUTORCH_BUILD_PYBIND)
   target_include_directories(portable_lib PRIVATE ${TORCH_INCLUDE_DIRS})
   target_compile_options(portable_lib PUBLIC ${_pybind_compile_options})
   target_link_libraries(portable_lib PRIVATE ${_dep_libs})
+  set_target_properties(portable_lib PROPERTIES ENABLE_EXPORTS ON)
   if(APPLE)
     # pip wheels will need to be able to find the torch libraries. On Linux, the
     # .so has non-absolute dependencies on libs like "libtorch.so" without
@@ -807,6 +818,10 @@ if(EXECUTORCH_BUILD_EXECUTOR_RUNNER)
   # Baseline libraries that executor_runner will link against.
   set(_executor_runner_libs executorch gflags)
 
+  if(EXECUTORCH_BUILD_AOTI)
+    list(APPEND _executor_runner_libs executorch_delegate_aoti)
+  endif()
+
   if(EXECUTORCH_BUILD_KERNELS_OPTIMIZED)
     list(APPEND _executor_runner_libs optimized_native_cpu_ops_lib)
   elseif(EXECUTORCH_BUILD_CADENCE)
@@ -829,7 +844,9 @@ if(EXECUTORCH_BUILD_EXECUTOR_RUNNER)
     endif()
   endif()
   target_link_libraries(executor_runner ${_executor_runner_libs})
+  set_property(TARGET executor_runner PROPERTY ENABLE_EXPORTS ON)
   target_compile_options(executor_runner PUBLIC ${_common_compile_options})
+
 endif()
 
 if(EXECUTORCH_BUILD_VULKAN)
