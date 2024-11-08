@@ -70,7 +70,7 @@ aten_dialect = export(
 )
 # 2. to_edge: Make optimizations for Edge devices
 edge_program = to_edge(aten_dialect)
-breakpoint()
+
 edge_program = edge_program.to_backend(AotiPartitioner([]))
 
 # 3. to_executorch: Convert the graph to an ExecuTorch program

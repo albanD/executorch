@@ -229,8 +229,7 @@ extern "C" {
     int32_t dtype,
     int32_t device_type,
     int32_t device_index,
-    AOTITensorHandle* ret_new_tensor)
-  {
+    AOTITensorHandle* ret_new_tensor) {
     throw std::runtime_error("Should never create from blob");
     return Error::NotSupported;
   }
@@ -301,58 +300,58 @@ extern "C" {
     AOTITensorHandle self,
     AOTITensorHandle src,
     int32_t non_blocking) {
-  // check if size is the same
-  if (self->dim() != src->dim()) {
-    std::cout << "self.dim() " << self->dim() << ", src.dim() " << src->dim() << std::endl;
-    throw std::runtime_error("self.dim() != src.dim()");
-  }
-  std::cout << "self->data_ptr(): " << self->data_ptr() << " sizes: " << self->sizes().data() << std::endl;
-  std::cout << "src->data_ptr(): " << src->data_ptr() << " sizes: " << src->sizes().data() << std::endl;
-  for (int i = 0; i < self->dim(); i++) {
-    if (self->sizes()[i] != src->sizes()[i]) {
-      std::cout << "self.sizes()[i] " << self->sizes()[i] << ", src.sizes()[i] " << src->sizes()[i] << std::endl;
-      throw std::runtime_error("size mismatch");
+    // check if size is the same
+    if (self->dim() != src->dim()) {
+      std::cout << "self.dim() " << self->dim() << ", src.dim() " << src->dim() << std::endl;
+      throw std::runtime_error("self.dim() != src.dim()");
     }
-  }
+    std::cout << "self->data_ptr(): " << self->data_ptr() << " sizes: " << self->sizes().data() << std::endl;
+    std::cout << "src->data_ptr(): " << src->data_ptr() << " sizes: " << src->sizes().data() << std::endl;
+    for (int i = 0; i < self->dim(); i++) {
+      if (self->sizes()[i] != src->sizes()[i]) {
+        std::cout << "self.sizes()[i] " << self->sizes()[i] << ", src.sizes()[i] " << src->sizes()[i] << std::endl;
+        throw std::runtime_error("size mismatch");
+      }
+    }
 
-  int size = src->nbytes();
-  // should check for device
-  cudaPointerAttributes srcAttributes, dstAttributes;
-  cudaError_t err;
-  // Get attributes of the source pointer
-  err = cudaPointerGetAttributes(&srcAttributes, src->data_ptr());
-  checkCudaError(err, "Failed to get source pointer attributes");
-  // Get attributes of the destination pointer
-  err = cudaPointerGetAttributes(&dstAttributes, self->data_ptr());
-  checkCudaError(err, "Failed to get destination pointer attributes");
-  bool srcIsDevice = srcAttributes.type == cudaMemoryTypeDevice;
-  bool dstIsDevice = dstAttributes.type == cudaMemoryTypeDevice;
-  // Determine the memory locations and perform the appropriate copy
-  if (srcIsDevice && dstIsDevice) {
-      // Device to Device copy
-      err = cudaMemcpy(self->mutable_data_ptr(), src->data_ptr(), size, cudaMemcpyDeviceToDevice);
-      checkCudaError(err, "Failed to copy from device to device");
-  } else if (srcIsDevice && !dstIsDevice) {
-      // Device to Host copy
-      err = cudaMemcpy(self->mutable_data_ptr(), src->data_ptr(), size, cudaMemcpyDeviceToHost);
-      std::cout << "Device to Host copy, self data: " << ((float*)self->data_ptr())[0] << std::endl;
-      checkCudaError(err, "Failed to copy from device to host");
-  } else if (!srcIsDevice && dstIsDevice) {
-      // Host to Device copy
-      err = cudaMemcpy(self->mutable_data_ptr(), src->data_ptr(), size, cudaMemcpyHostToDevice);
-      std::cout << "Host to Device copy, src data: " << ((float*)src->data_ptr())[0] << std::endl;
-      checkCudaError(err, "Failed to copy from host to device");
-  } else if (!srcIsDevice && !dstIsDevice) {
-      // Host to Host copy
-      std::cout << "Host to Host copy, src data: " << ((float*)src->data_ptr())[0] << std::endl;
-      std::memcpy(self->mutable_data_ptr(), src->data_ptr(), size);
-  } else {
-      std::cerr << "Error: Unknown memory type. self: " << dstAttributes.type << ", src: " << srcAttributes.type << std::endl;
-      throw std::runtime_error("Unknown memory type");
+    int size = src->nbytes();
+    // should check for device
+    cudaPointerAttributes srcAttributes, dstAttributes;
+    cudaError_t err;
+    // Get attributes of the source pointer
+    err = cudaPointerGetAttributes(&srcAttributes, src->data_ptr());
+    checkCudaError(err, "Failed to get source pointer attributes");
+    // Get attributes of the destination pointer
+    err = cudaPointerGetAttributes(&dstAttributes, self->data_ptr());
+    checkCudaError(err, "Failed to get destination pointer attributes");
+    bool srcIsDevice = srcAttributes.type == cudaMemoryTypeDevice;
+    bool dstIsDevice = dstAttributes.type == cudaMemoryTypeDevice;
+    // Determine the memory locations and perform the appropriate copy
+    if (srcIsDevice && dstIsDevice) {
+        // Device to Device copy
+        err = cudaMemcpy(self->mutable_data_ptr(), src->data_ptr(), size, cudaMemcpyDeviceToDevice);
+        checkCudaError(err, "Failed to copy from device to device");
+    } else if (srcIsDevice && !dstIsDevice) {
+        // Device to Host copy
+        err = cudaMemcpy(self->mutable_data_ptr(), src->data_ptr(), size, cudaMemcpyDeviceToHost);
+        std::cout << "Device to Host copy, self data: " << ((float*)self->data_ptr())[0] << std::endl;
+        checkCudaError(err, "Failed to copy from device to host");
+    } else if (!srcIsDevice && dstIsDevice) {
+        // Host to Device copy
+        err = cudaMemcpy(self->mutable_data_ptr(), src->data_ptr(), size, cudaMemcpyHostToDevice);
+        std::cout << "Host to Device copy, src data: " << ((float*)src->data_ptr())[0] << std::endl;
+        checkCudaError(err, "Failed to copy from host to device");
+    } else if (!srcIsDevice && !dstIsDevice) {
+        // Host to Host copy
+        std::cout << "Host to Host copy, src data: " << ((float*)src->data_ptr())[0] << std::endl;
+        std::memcpy(self->mutable_data_ptr(), src->data_ptr(), size);
+    } else {
+        std::cerr << "Error: Unknown memory type. self: " << dstAttributes.type << ", src: " << srcAttributes.type << std::endl;
+        throw std::runtime_error("Unknown memory type");
+    }
+      // print first value of src and self
+    return Error::Ok;
   }
-    // print first value of src and self
-  return Error::Ok;
-}
 }
 
 struct AOTIDelegateHandle {

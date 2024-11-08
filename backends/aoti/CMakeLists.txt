@@ -31,7 +31,11 @@ target_include_directories(
   executorch_delegate_aoti PUBLIC ${_common_include_directories} ${CUDA_INCLUDE_DIRS}
 )
 
-add_subdirectory(${EXECUTORCH_ROOT}/extension/tensor ${CMAKE_CURRENT_BINARY_DIR}/../../extension/tensor)
+if(TARGET extension_tensor)
+  message(STATUS "extension_tensor already defined")
+else()
+  add_subdirectory(${EXECUTORCH_ROOT}/extension/tensor ${CMAKE_CURRENT_BINARY_DIR}/../../extension/tensor)
+endif()
 
 target_compile_options(executorch_delegate_aoti PUBLIC -fexceptions -frtti -fPIC)
 target_link_libraries(executorch_delegate_aoti PUBLIC extension_tensor ${CUDA_LIBRARIES})
